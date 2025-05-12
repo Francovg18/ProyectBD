@@ -1,0 +1,44 @@
+```
+   # Entorno virtual de Python
+   venvP/
+   venv/
+
+   # Archivos generados por Python
+   *.pyc
+   __pycache__/
+   *.pyo
+   *.pyd
+   .Python
+   *.egg-info/
+   pip_log.txt
+
+   # Archivos de datos generados
+   data/
+   *.csv
+
+   # Archivos de Node.js
+   frontend/node_modules/
+   frontend/.vite/
+   frontend/dist/
+   frontend/dist-ssr/
+
+   # Archivos de caché y logs
+   *.log
+   .npm/
+   .cache/
+   *.cache
+
+   # Archivos de configuración del sistema
+   .DS_Store
+   Thumbs.db
+
+   # Archivos de entorno
+   .env
+   .env.local
+   .env.development.local
+   .env.test.local
+   .env.production.local
+
+   # Archivos de llaves (por seguridad)
+   KEYS/
+   ```

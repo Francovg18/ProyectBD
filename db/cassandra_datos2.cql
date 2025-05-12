@@ -1,7 +1,4 @@
 
-
-
-
 CREATE KEYSPACE elecciones WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1};
 USE elecciones;
 

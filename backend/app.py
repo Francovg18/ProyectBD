@@ -1,49 +1,117 @@
-from flask import Flask
+from flask import Flask, request
 from flask_cors import CORS
-from database.cassandra_conn import session
+from cassandra.cluster import Cluster
+from redis import Redis
 
+# Inicializar la aplicación Flask
 app = Flask(__name__)
-CORS(app)
 
+# Configurar CORS
+CORS(app, resources={r"/*": {"origins": "*"}})
+
+# Conectar a Cassandra (solo para partidos)
+cluster = Cluster(['localhost'])
+session = cluster.connect('elecciones')
+
+# Conectar a Redis
+r = Redis(host='localhost', port=6379, decode_responses=True)
 
 @app.route("/votos")
 def votos_por_partido():
-    votos = session.execute("SELECT id_partido, cantidad FROM votos")
-    partidos = session.execute(
-        "SELECT id_partido, nombre, sigla FROM partido_politico")
+    departamento = request.args.get('departamento')
+    try:
+        # Consultar partidos activos
+        partidos = session.execute(
+            "SELECT id_partido, nombre, sigla FROM Partido_Politico WHERE estado = 'activo' ALLOW FILTERING"
+        )
+        partidos_info = {
+            str(p.id_partido): {"nombre": p.nombre, "sigla": p.sigla}
+            for p in partidos
+        }
+        conteo = {idp: 0 for idp in partidos_info}
 
-    partidos_info = {
-        str(p.id_partido): {"nombre": p.nombre, "sigla": p.sigla}
-        for p in partidos
-    }
+        # Usar totales preagregados en Redis
+        departamentos = ['La_Paz', 'Cochabamba', 'Santa_Cruz', 'Oruro', 'Potosí', 'Chuquisaca', 'Tarija', 'Pando', 'Beni']
+        if departamento and departamento != 'todos':
+            # Votos por departamento
+            for idp in partidos_info:
+                votos = r.hget(f'votos_totales:departamento:{departamento}', idp) or 0
+                conteo[idp] = int(votos)
+        else:
+            # Votos nacionales (sumar todos los departamentos)
+            for dep in departamentos:
+                for idp in partidos_info:
+                    votos = r.hget(f'votos_totales:departamento:{dep}', idp) or 0
+                    conteo[idp] += int(votos)
 
-    # Inicializar votos
-    conteo = {idp: 0 for idp in partidos_info}
+        total_votos = sum(conteo.values())
+        data = []
+        for idp, cantidad in conteo.items():
+            if idp in partidos_info:
+                info = partidos_info[idp]
+                porcentaje = (cantidad / total_votos * 100) if total_votos > 0 else 0
+                data.append({
+                    "nombre": info["nombre"],
+                    "sigla": info["sigla"],
+                    "votos": cantidad,
+                    "porcentaje": round(porcentaje, 2)
+                })
+        data.sort(key=lambda x: x["votos"], reverse=True)
+        return {"data": data}
+    except Exception as e:
+        print(f"Error en /votos: {str(e)}")
+        return {"error": str(e)}, 500
 
-    # Sumar votos por partido
-    for row in votos:
-        idp = str(row.id_partido)
-        if idp in conteo:
-            conteo[idp] += row.cantidad
+@app.route("/votos_por_departamento")
+def votos_por_departamento():
+    try:
+        departamentos = ['La_Paz', 'Cochabamba', 'Santa_Cruz', 'Oruro', 'Potosí', 'Chuquisaca', 'Tarija', 'Pando', 'Beni']
+        partidos = session.execute(
+            "SELECT id_partido, nombre, sigla FROM Partido_Politico WHERE estado = 'activo' ALLOW FILTERING"
+        )
+        partidos_info = {
+            str(p.id_partido): {"nombre": p.nombre, "sigla": p.sigla}
+            for p in partidos
+        }
+        data = []
+        for dep in departamentos:
+            conteo = {idp: 0 for idp in partidos_info}
+            for idp in partidos_info:
+                votos = r.hget(f'votos_totales:departamento:{dep}', idp) or 0
+                conteo[idp] = int(votos)
+            total_votos = sum(conteo.values())
+            if total_votos > 0:
+                # Encontrar el partido con más votos
+                idp_max = max(conteo, key=conteo.get)
+                porcentaje = (conteo[idp_max] / total_votos * 100) if total_votos > 0 else 0
+                data.append({
+                    "departamento": dep,
+                    "partido_ganador": partidos_info[idp_max]["nombre"],
+                    "sigla": partidos_info[idp_max]["sigla"],
+                    "porcentaje": round(porcentaje, 2)
+                })
+        return {"data": data}
+    except Exception as e:
+        print(f"Error en /votos_por_departamento: {str(e)}")
+        return {"error": str(e)}, 500
 
-    total_votos = sum(conteo.values())
-
-    # Construir respuesta
-    data = []
-    for idp, cantidad in conteo.items():
-        info = partidos_info[idp]
-        porcentaje = (cantidad / total_votos * 100) if total_votos > 0 else 0
-        data.append({
-            "nombre": info["nombre"],
-            "sigla": info["sigla"],
-            "votos": cantidad,
-            "porcentaje": round(porcentaje, 2)
-        })
-
-    data.sort(key=lambda x: x["votos"], reverse=True)
-
-    return {"data": data}
-
+@app.route("/auditoria")
+def auditoria():
+    try:
+        logs = r.xrange('log_auditoria', '-', '+', count=5)
+        data = [
+            {
+                "user_id": log[1]['user_id'],
+                "accion": log[1]['accion'],
+                "id_mesa": log[1]['id_mesa'],
+                "fecha_hora": log[1]['fecha_hora']
+            }
+            for log in logs
+        ]
+        return {"data": data}
+    except Exception as e:
+        print(f"Error en /auditoria: {str(e)}")
+        return {"error": str(e)}, 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

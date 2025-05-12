@@ -9,11 +9,11 @@ function App() {
   return (
     <>
       <Router>
-      <Dashboard />
-      <Routes>
-        <Route path="/juror-login" element={<JurorLogin />} />
-        <Route path="/admin-login" element={<AdminLogin />} />
-      </Routes>
+        <Dashboard />
+        <Routes>
+          <Route path="/juror-login" element={<JurorLogin />} />
+          <Route path="/admin-login" element={<AdminLogin />} />
+        </Routes>
       </Router>
     </>
      
