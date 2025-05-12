@@ -1,3 +1,4 @@
+```
 # Entorno virtual de Python
 venvP/
 venv/
@@ -39,4 +40,6 @@ Thumbs.db
 .env.production.local
 
 # Archivos de llaves (por seguridad)
+KEYS
 KEYS/
+```
