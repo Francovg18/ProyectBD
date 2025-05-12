@@ -1,4 +1,3 @@
-```
    # Entorno virtual de Python
    venvP/
    venv/
@@ -41,4 +40,4 @@
 
    # Archivos de llaves (por seguridad)
    KEYS/
-   ```
+   
